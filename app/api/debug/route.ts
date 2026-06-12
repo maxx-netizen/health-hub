@@ -15,11 +15,17 @@ export async function GET(req: NextRequest) {
     SELECT name, count(*)::int AS punten, min(date)::date AS van, max(date)::date AS tot
     FROM metric GROUP BY name ORDER BY name`;
   const workouts = await sql`SELECT count(*)::int AS n FROM workout`;
+  const sleepFields = await sql`
+    SELECT field, count(*)::int AS n, round(avg(value)::numeric, 1) AS gem
+    FROM metric WHERE name = 'sleep_analysis' GROUP BY field ORDER BY field`;
   const lines = [
     "=== METRICS IN DATABASE ===",
     ...metrics.map((m: any) => `${m.name}: ${m.punten} punten (${m.van} t/m ${m.tot})`),
     "",
     `workouts: ${workouts[0].n}`,
+    "",
+    "=== SLEEP_ANALYSIS VELDEN ===",
+    ...sleepFields.map((f: any) => `${f.field}: ${f.n}x, gemiddeld ${f.gem}`),
   ];
   return new NextResponse(lines.join("\n"), {
     headers: { "Content-Type": "text/plain; charset=utf-8" },

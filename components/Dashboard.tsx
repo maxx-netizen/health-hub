@@ -100,6 +100,8 @@ export default function Dashboard({daily,workouts,insights,dayScore}:{
   const [goals,setGoals]=useState(DEFAULT_GOALS);
   const [editGoals,setEditGoals]=useState(false);
   const [detailKey,setDetailKey]=useState<string|null>(null);
+  const [showSettings,setShowSettings]=useState(false);
+  const [showInfo,setShowInfo]=useState(false);
 
   // Laad opgeslagen doelen
   useEffect(()=>{
@@ -181,13 +183,13 @@ export default function Dashboard({daily,workouts,insights,dayScore}:{
   if(!allDays.length){
     return(
       <div className="container">
-        <AppHeader today={today}/>
+        <AppHeader today={today} onProfile={()=>setShowSettings(true)} onBell={()=>setShowInfo(true)}/>
         <div className="empty-state">
           <svg width={52} height={52} viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.25)" strokeWidth={1.2} style={{marginBottom:20}}><path d="M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20zM12 8v4M12 16h.01"/></svg>
           <h2>Nog geen data</h2>
           <p>Zodra Health Auto Export pusht naar<br/><code>/api/ingest</code> verschijnt hier alles.</p>
         </div>
-        <TabBar tab={tab} onTab={setTab}/>
+        <TabBar tab={tab} onTab={setTab} onSettings={()=>setShowSettings(true)}/>
       </div>
     );
   }
@@ -206,7 +208,7 @@ export default function Dashboard({daily,workouts,insights,dayScore}:{
 
   return(
     <div className="container">
-      <AppHeader today={today}/>
+      <AppHeader today={today} onProfile={()=>setShowSettings(true)} onBell={()=>setShowInfo(true)}/>
 
       {tab==="home"&&<HomeTab
         herstelPct={herstelPct} stappenPct={stappenPct} waterPct={waterPct}
@@ -234,7 +236,7 @@ export default function Dashboard({daily,workouts,insights,dayScore}:{
         onMetricClick={setDetailKey}
       />}
 
-      <TabBar tab={tab} onTab={setTab}/>
+      <TabBar tab={tab} onTab={setTab} onSettings={()=>setShowSettings(true)}/>
 
       {/* Modals */}
       {editGoals&&<EditGoalsModal goals={goals} setGoals={setGoals} onClose={()=>setEditGoals(false)}/>}
@@ -245,24 +247,25 @@ export default function Dashboard({daily,workouts,insights,dayScore}:{
         weekAvg={weekAvg}
         onClose={()=>setDetailKey(null)}
       />}
+      {showSettings&&<SettingsModal goals={goals} setGoals={setGoals} onClose={()=>setShowSettings(false)}/>}
+      {showInfo&&<InfoModal onClose={()=>setShowInfo(false)}/>}
     </div>
   );
 }
 
 /* ─── App Header ─── */
-function AppHeader({today}:{today:string}){
+function AppHeader({today,onProfile,onBell}:{today:string;onProfile?:()=>void;onBell?:()=>void}){
   return(
     <div className="app-header">
       <div className="header-left">
-        <button className="header-date-pill">
+        <div className="header-date-pill">
           <svg width={13} height={13} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
           Vandaag, {today}
-          <span style={{opacity:.55,display:"flex",alignItems:"center"}}><IcoChevron/></span>
-        </button>
+        </div>
       </div>
       <div className="header-right">
-        <button className="header-icon-btn"><IcoUser/></button>
-        <button className="header-icon-btn"><IcoBell/></button>
+        <button className="header-icon-btn" onClick={onProfile} title="Profiel"><IcoUser/></button>
+        <button className="header-icon-btn" onClick={onBell} title="Info"><IcoBell/></button>
       </div>
     </div>
   );
@@ -463,19 +466,7 @@ function HomeTab({herstelPct,stappenPct,waterPct,kcalPct,slaapPct,slaapMin,slaap
 function TrendsTab({rows,range,setRange,herstelPct,stappenPct,waterPct,slaapPct,latest,prev,weekAvg,onMetricClick}:any){
   const [filter,setFilter]=useState("Alles");
   const [compareSel,setCompareSel]=useState("stappen");
-  const filters=["Alles","Activiteit","Slaap","Herstel","Lichaam"];
-  const latestHRV=latest("hrv");
-  const latestSlaap=latest("slaap");
-
-  // Welke metrieken tonen per filter
-  const metricsByFilter:{[k:string]:string[]}={
-    Alles:["slaap","hrv","rusthr","stappen","gewicht"],
-    Activiteit:["stappen","kcal","water"],
-    Slaap:["slaap","hrv"],
-    Herstel:["hrv","rusthr"],
-    Lichaam:["gewicht","vet","spier"],
-  };
-  const toShow=metricsByFilter[filter]||[];
+  const filters=["Alles","Slaap","Activiteit","Herstel","Lichaam"];
 
   const metaMap:{[k:string]:{label:string;unit:string;color:string}}={
     hrv:{label:"Hartslagvariabiliteit",unit:"ms",color:C.green},
@@ -489,7 +480,8 @@ function TrendsTab({rows,range,setRange,herstelPct,stappenPct,waterPct,slaapPct,
     spier:{label:"Spiermassa",unit:"kg",color:C.teal},
   };
 
-  const compareKeys=["stappen","hrv","slaap","gewicht","kcal"];
+  const latestHRV=latest("hrv");
+  const latestSlaap=latest("slaap");
 
   return(
     <>
@@ -504,64 +496,169 @@ function TrendsTab({rows,range,setRange,herstelPct,stappenPct,waterPct,slaapPct,
         ))}
       </div>
 
-      {/* Wekelijks rapport */}
-      <SectionHeader title="Samenvatting"/>
-      <div className="photo-cards">
-        <PhotoCard title="Activiteit" sub={`${(latest("stappen")??0).toLocaleString("nl-NL")} stappen`} pct={stappenPct} gradient="linear-gradient(130deg,#0d1f0d,#0a1505)"/>
-        <PhotoCard title="Slaap" sub={`${fmtMin(latestSlaap?Math.round(latestSlaap*60):null)} geslapen`} pct={slaapPct} gradient="linear-gradient(130deg,#0d0d2e,#080820)"/>
-        <PhotoCard title="Herstel" sub={`HRV ${latestHRV??"–"} ms`} pct={herstelPct} gradient="linear-gradient(130deg,#1f100d,#120800)"/>
-      </div>
-
-      {/* Statistieken vergelijken */}
-      <SectionHeader title="Statistieken vergelijken"/>
-      <div className="sonar-card" style={{padding:"14px 16px"}}>
-        <div className="compare-chips">
-          {compareKeys.map(k=>(
-            <button key={k} className={`compare-chip${compareSel===k?" sel":""}`}
-              onClick={()=>setCompareSel(k)}>
-              {metaMap[k]?.label.split(" ")[0]}
-            </button>
-          ))}
+      {/* ── ALLES ── */}
+      {filter==="Alles"&&<>
+        <SectionHeader title="Samenvatting"/>
+        <div className="photo-cards">
+          <PhotoCard title="Activiteit" sub={`${(latest("stappen")??0).toLocaleString("nl-NL")} stappen`} pct={stappenPct} gradient="linear-gradient(130deg,#0d1f0d,#0a1505)"/>
+          <PhotoCard title="Slaap" sub={`${fmtMin(latestSlaap?Math.round(latestSlaap*60):null)} geslapen`} pct={slaapPct} gradient="linear-gradient(130deg,#0d0d2e,#080820)"/>
+          <PhotoCard title="Herstel" sub={`HRV ${latestHRV??"–"} ms`} pct={herstelPct} gradient="linear-gradient(130deg,#1f100d,#120800)"/>
         </div>
-        <div style={{display:"flex",gap:16,marginBottom:10}}>
-          <div style={{flex:1,background:"rgba(255,255,255,0.05)",borderRadius:12,padding:"10px 14px"}}>
-            <div style={{fontSize:11,color:C.muted}}>Laatste 7d gem.</div>
-            <div style={{fontSize:18,fontWeight:800,marginTop:4}}>
-              {weekAvg(compareSel,0)?.toFixed(1)??<span style={{color:C.muted}}>–</span>}
-              <span style={{fontSize:12,color:C.muted}}> {metaMap[compareSel]?.unit}</span>
-            </div>
+        <SectionHeader title="Vergelijken"/>
+        <div className="sonar-card" style={{padding:"14px 16px"}}>
+          <div className="compare-chips">
+            {["stappen","hrv","slaap","gewicht","kcal"].map(k=>(
+              <button key={k} className={`compare-chip${compareSel===k?" sel":""}`} onClick={()=>setCompareSel(k)}>
+                {metaMap[k]?.label.split(" ")[0]}
+              </button>
+            ))}
           </div>
-          <div style={{flex:1,background:"rgba(255,255,255,0.05)",borderRadius:12,padding:"10px 14px"}}>
-            <div style={{fontSize:11,color:C.muted}}>Week daarvoor</div>
-            <div style={{fontSize:18,fontWeight:800,marginTop:4}}>
-              {weekAvg(compareSel,1)?.toFixed(1)??<span style={{color:C.muted}}>–</span>}
-              <span style={{fontSize:12,color:C.muted}}> {metaMap[compareSel]?.unit}</span>
-            </div>
+          <div style={{display:"flex",gap:10,marginBottom:10}}>
+            <WeekBox label="Laatste 7d" val={weekAvg(compareSel,0)?.toFixed(1)} unit={metaMap[compareSel]?.unit}/>
+            <WeekBox label="Week daarvoor" val={weekAvg(compareSel,1)?.toFixed(1)} unit={metaMap[compareSel]?.unit}/>
+          </div>
+          <ResponsiveContainer width="100%" height={120}>
+            <AreaChart data={rows} margin={{left:0,right:0,top:4,bottom:0}}>
+              <CartesianGrid stroke="rgba(255,255,255,0.04)" vertical={false}/>
+              <XAxis dataKey="day" tick={{fill:"rgba(255,255,255,0.35)",fontSize:9}} axisLine={false} tickLine={false} interval="preserveStartEnd"/>
+              <YAxis tick={{fill:"rgba(255,255,255,0.35)",fontSize:9}} width={28} axisLine={false} tickLine={false}/>
+              <Tooltip contentStyle={tt}/>
+              <Area dataKey={compareSel} stroke={metaMap[compareSel]?.color||C.green} fill={metaMap[compareSel]?.color||C.green} fillOpacity={0.12} strokeWidth={2} connectNulls dot={false}/>
+            </AreaChart>
+          </ResponsiveContainer>
+        </div>
+        {["slaap","hrv","stappen","gewicht"].map(k=>(
+          <div key={k} onClick={()=>onMetricClick(k)}>
+            <MetricChart title={metaMap[k].label} value={latest(k)!=null?`${latest(k)?.toFixed?.(1)} ${metaMap[k].unit}`:null} rows={rows} dataKey={k} color={metaMap[k].color}/>
+          </div>
+        ))}
+      </>}
+
+      {/* ── SLAAP ── */}
+      {filter==="Slaap"&&<>
+        <SectionHeader title="Slaap"/>
+        <div className="sonar-card">
+          <div style={{display:"flex",gap:10,marginBottom:14}}>
+            <WeekBox label="Gem. slaap 7d" val={weekAvg("slaap",0)!=null?fmtMin(Math.round((weekAvg("slaap",0)??0)*60)):undefined} unit=""/>
+            <WeekBox label="Week daarvoor" val={weekAvg("slaap",1)!=null?fmtMin(Math.round((weekAvg("slaap",1)??0)*60)):undefined} unit=""/>
+          </div>
+          <ResponsiveContainer width="100%" height={130}>
+            <BarChart data={rows} margin={{left:0,right:0,top:4,bottom:0}}>
+              <CartesianGrid stroke="rgba(255,255,255,0.04)" vertical={false}/>
+              <XAxis dataKey="day" tick={{fill:"rgba(255,255,255,0.35)",fontSize:9}} axisLine={false} tickLine={false} interval="preserveStartEnd"/>
+              <YAxis tick={{fill:"rgba(255,255,255,0.35)",fontSize:9}} width={24} axisLine={false} tickLine={false}/>
+              <Tooltip contentStyle={tt}/>
+              <Bar dataKey="diep" name="Diepe slaap" stackId="s" fill={C.purple} radius={[0,0,0,0]}/>
+              <Bar dataKey="rem" name="REM" stackId="s" fill={C.teal}/>
+              <Bar dataKey="licht" name="Lichte slaap" stackId="s" fill={C.blue} radius={[4,4,0,0]}/>
+            </BarChart>
+          </ResponsiveContainer>
+          <div style={{display:"flex",gap:14,marginTop:10}}>
+            <LegDot color={C.purple} label="Diepe slaap"/>
+            <LegDot color={C.teal} label="REM"/>
+            <LegDot color={C.blue} label="Lichte slaap"/>
           </div>
         </div>
-        <ResponsiveContainer width="100%" height={130}>
-          <AreaChart data={rows} margin={{left:0,right:0,top:4,bottom:0}}>
-            <CartesianGrid stroke="rgba(255,255,255,0.04)" vertical={false}/>
-            <XAxis dataKey="day" tick={{fill:"rgba(255,255,255,0.35)",fontSize:9}} axisLine={false} tickLine={false} interval="preserveStartEnd"/>
-            <YAxis tick={{fill:"rgba(255,255,255,0.35)",fontSize:9}} width={28} axisLine={false} tickLine={false}/>
-            <Tooltip contentStyle={tt}/>
-            <Area dataKey={compareSel} name={metaMap[compareSel]?.label} stroke={metaMap[compareSel]?.color||C.green}
-              fill={metaMap[compareSel]?.color||C.green} fillOpacity={0.12} strokeWidth={2} connectNulls dot={false}/>
-          </AreaChart>
-        </ResponsiveContainer>
-      </div>
+        {["slaap","hrv"].map(k=>(
+          <div key={k} onClick={()=>onMetricClick(k)}>
+            <MetricChart title={metaMap[k].label} value={latest(k)!=null?`${latest(k)?.toFixed?.(1)} ${metaMap[k].unit}`:null} rows={rows} dataKey={k} color={metaMap[k].color}/>
+          </div>
+        ))}
+      </>}
 
-      {/* Per metriek cards */}
-      {toShow.map(key=>(
-        <div key={key} onClick={()=>onMetricClick(key)}>
-          <MetricChart
-            title={metaMap[key]?.label}
-            value={latest(key)!=null?`${latest(key)?.toFixed?.(1)} ${metaMap[key]?.unit}`:null}
-            rows={rows} dataKey={key} color={metaMap[key]?.color||C.green}
-          />
+      {/* ── ACTIVITEIT ── */}
+      {filter==="Activiteit"&&<>
+        <SectionHeader title="Activiteit"/>
+        <div className="sonar-card">
+          <div style={{display:"flex",gap:10,marginBottom:14}}>
+            <WeekBox label="Gem. stappen 7d" val={weekAvg("stappen",0)?.toFixed(0)} unit=""/>
+            <WeekBox label="Week daarvoor" val={weekAvg("stappen",1)?.toFixed(0)} unit=""/>
+          </div>
+          <ResponsiveContainer width="100%" height={130}>
+            <BarChart data={rows} margin={{left:0,right:0,top:4,bottom:0}}>
+              <CartesianGrid stroke="rgba(255,255,255,0.04)" vertical={false}/>
+              <XAxis dataKey="day" tick={{fill:"rgba(255,255,255,0.35)",fontSize:9}} axisLine={false} tickLine={false} interval="preserveStartEnd"/>
+              <YAxis tick={{fill:"rgba(255,255,255,0.35)",fontSize:9}} width={28} axisLine={false} tickLine={false}/>
+              <Tooltip contentStyle={tt}/>
+              <Bar dataKey="stappen" name="Stappen" fill={C.green} radius={[4,4,0,0]}/>
+            </BarChart>
+          </ResponsiveContainer>
         </div>
-      ))}
+        {["stappen","kcal","water"].map(k=>(
+          <div key={k} onClick={()=>onMetricClick(k)}>
+            <MetricChart title={metaMap[k].label} value={latest(k)!=null?`${latest(k)?.toFixed?.(0)} ${metaMap[k].unit}`:null} rows={rows} dataKey={k} color={metaMap[k].color}/>
+          </div>
+        ))}
+      </>}
+
+      {/* ── HERSTEL ── */}
+      {filter==="Herstel"&&<>
+        <SectionHeader title="Herstel & HRV"/>
+        <div className="sonar-card">
+          <div style={{display:"flex",gap:10,marginBottom:14}}>
+            <WeekBox label="Gem. HRV 7d" val={weekAvg("hrv",0)?.toFixed(0)} unit="ms"/>
+            <WeekBox label="Week daarvoor" val={weekAvg("hrv",1)?.toFixed(0)} unit="ms"/>
+          </div>
+          <ResponsiveContainer width="100%" height={130}>
+            <AreaChart data={rows} margin={{left:0,right:0,top:4,bottom:0}}>
+              <CartesianGrid stroke="rgba(255,255,255,0.04)" vertical={false}/>
+              <XAxis dataKey="day" tick={{fill:"rgba(255,255,255,0.35)",fontSize:9}} axisLine={false} tickLine={false} interval="preserveStartEnd"/>
+              <YAxis tick={{fill:"rgba(255,255,255,0.35)",fontSize:9}} width={28} axisLine={false} tickLine={false}/>
+              <Tooltip contentStyle={tt}/>
+              <Area dataKey="hrv" name="HRV" stroke={C.green} fill={C.green} fillOpacity={0.15} strokeWidth={2} connectNulls dot={false}/>
+            </AreaChart>
+          </ResponsiveContainer>
+        </div>
+        {["hrv","rusthr"].map(k=>(
+          <div key={k} onClick={()=>onMetricClick(k)}>
+            <MetricChart title={metaMap[k].label} value={latest(k)!=null?`${latest(k)?.toFixed?.(0)} ${metaMap[k].unit}`:null} rows={rows} dataKey={k} color={metaMap[k].color}/>
+          </div>
+        ))}
+      </>}
+
+      {/* ── LICHAAM ── */}
+      {filter==="Lichaam"&&<>
+        <SectionHeader title="Lichaamssamenstelling"/>
+        <div className="sonar-card">
+          <div style={{display:"flex",gap:10,marginBottom:14}}>
+            <WeekBox label="Huidig gewicht" val={latest("gewicht")?.toFixed(1)} unit="kg"/>
+            <WeekBox label="7d geleden" val={weekAvg("gewicht",1)?.toFixed(1)} unit="kg"/>
+          </div>
+          <ResponsiveContainer width="100%" height={130}>
+            <LineChart data={rows} margin={{left:0,right:0,top:4,bottom:0}}>
+              <CartesianGrid stroke="rgba(255,255,255,0.04)" vertical={false}/>
+              <XAxis dataKey="day" tick={{fill:"rgba(255,255,255,0.35)",fontSize:9}} axisLine={false} tickLine={false} interval="preserveStartEnd"/>
+              <YAxis domain={["auto","auto"]} tick={{fill:"rgba(255,255,255,0.35)",fontSize:9}} width={28} axisLine={false} tickLine={false}/>
+              <Tooltip contentStyle={tt}/>
+              <Line dataKey="gewicht" name="Gewicht (kg)" stroke={C.blue} strokeWidth={2.5} dot={false} connectNulls/>
+            </LineChart>
+          </ResponsiveContainer>
+        </div>
+        {["gewicht","vet","spier"].map(k=>(
+          <div key={k} onClick={()=>onMetricClick(k)}>
+            <MetricChart title={metaMap[k].label} value={latest(k)!=null?`${latest(k)?.toFixed?.(1)} ${metaMap[k].unit}`:null} rows={rows} dataKey={k} color={metaMap[k].color}/>
+          </div>
+        ))}
+      </>}
     </>
+  );
+}
+
+function WeekBox({label,val,unit}:{label:string;val?:string|null;unit:string}){
+  return(
+    <div style={{flex:1,background:"rgba(255,255,255,0.05)",borderRadius:12,padding:"10px 12px"}}>
+      <div style={{fontSize:11,color:C.muted,marginBottom:4}}>{label}</div>
+      <div style={{fontSize:18,fontWeight:800}}>{val??<span style={{color:C.muted}}>–</span>}<span style={{fontSize:12,color:C.muted}}>{val&&unit?" "+unit:""}</span></div>
+    </div>
+  );
+}
+
+function LegDot({color,label}:{color:string;label:string}){
+  return(
+    <span style={{display:"flex",alignItems:"center",gap:5,fontSize:11,color:"rgba(255,255,255,0.5)"}}>
+      <span style={{width:8,height:8,borderRadius:2,background:color,display:"inline-block"}}/>
+      {label}
+    </span>
   );
 }
 
@@ -761,6 +858,10 @@ function PhaseRow({label,min,max,color}:{label:string;min:number|null;max:number
 }
 
 function WorkoutRow({w}:{w:any}){
+  // Defensief: als duration nog in seconden staat (> 300) → minuten
+  const durMin = w.duration ? (w.duration > 300 ? Math.round(w.duration/60) : Math.round(w.duration)) : null;
+  // Defensief: als energie in kJ staat (> 5000) → kcal
+  const kcal = w.energy ? (w.energy > 5000 ? Math.round(w.energy/4.184) : Math.round(w.energy)) : null;
   return(
     <div className="workout-row">
       <div className="workout-ico-wrap"><WorkoutIcon name={w.name??""}/></div>
@@ -768,11 +869,11 @@ function WorkoutRow({w}:{w:any}){
         <div className="workout-name">{w.name}</div>
         <div className="workout-meta">
           {new Date(w.start).toLocaleDateString("nl-NL",{weekday:"short",day:"numeric",month:"short"})}
-          {w.duration?` · ${Math.round(w.duration)} min`:""}
+          {durMin?` · ${durMin} min`:""}
           {w.avghr?` · ${Math.round(w.avghr)} bpm`:""}
         </div>
       </div>
-      {w.energy&&<div className="workout-kcal">{Math.round(w.energy)}<span style={{fontSize:11,opacity:.55}}> kcal</span></div>}
+      {kcal&&<div className="workout-kcal">{kcal.toLocaleString("nl-NL")}<span style={{fontSize:11,opacity:.55}}> kcal</span></div>}
     </div>
   );
 }
@@ -819,7 +920,7 @@ function EmptySection({msg}:{msg:string}){
 }
 
 /* ─── Tab Bar ─── */
-function TabBar({tab,onTab}:{tab:string;onTab:(t:any)=>void}){
+function TabBar({tab,onTab,onSettings}:{tab:string;onTab:(t:any)=>void;onSettings:()=>void}){
   return(
     <nav className="tabbar">
       <button className={`tab-item${tab==="home"?" active":""}`} onClick={()=>onTab("home")}>
@@ -831,10 +932,117 @@ function TabBar({tab,onTab}:{tab:string;onTab:(t:any)=>void}){
       <button className={`tab-item${tab==="activiteit"?" active":""}`} onClick={()=>onTab("activiteit")}>
         <IcoHeart a={tab==="activiteit"}/><span>Activiteit</span>
       </button>
-      <a className={`tab-item${typeof window!=="undefined"&&window.location.pathname==="/chat"?" active":""}`} href="/chat">
+      <a className="tab-item" href="/chat">
         <IcoStar/><span>AI Coach</span>
       </a>
-      <button className="tab-add"><IcoPlus/></button>
+      <button className={`tab-item${tab==="instellingen"?" active":""}`} onClick={onSettings}>
+        <svg width={24} height={24} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.6} strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+        <span>Instellingen</span>
+      </button>
     </nav>
+  );
+}
+
+/* ─── Instellingen Modal ─── */
+function SettingsModal({goals,setGoals,onClose}:{goals:any;setGoals:(g:any)=>void;onClose:()=>void}){
+  const [local,setLocal]=useState({...goals});
+  const goalItems=[
+    {key:"stappen",label:"Stappen per dag",unit:"stap.",min:1000,max:30000,step:500},
+    {key:"kcal",label:"Actieve calorieën",unit:"kcal",min:100,max:2000,step:50},
+    {key:"slaap",label:"Slaapdoel",unit:"min",min:240,max:600,step:15},
+    {key:"water",label:"Waterdoel",unit:"ml",min:500,max:5000,step:250},
+  ];
+  function save(){
+    setGoals(local);
+    try{ localStorage.setItem("hh_goals",JSON.stringify(local)); }catch{}
+    onClose();
+  }
+  return(
+    <div className="modal-overlay" onClick={onClose}>
+      <div className="modal-sheet" onClick={e=>e.stopPropagation()}>
+        <div className="modal-handle"/>
+        <div className="modal-header">
+          <span className="modal-title">Instellingen</span>
+          <button className="modal-done" onClick={onClose}>Sluiten</button>
+        </div>
+        <div className="modal-body">
+          <div style={{fontSize:13,fontWeight:700,color:"rgba(255,255,255,0.4)",textTransform:"uppercase",letterSpacing:"0.07em",marginBottom:12}}>
+            Persoonlijke doelen
+          </div>
+          {goalItems.map(({key,label,unit,min,max,step})=>(
+            <div key={key} style={{marginBottom:20}}>
+              <div style={{display:"flex",justifyContent:"space-between",marginBottom:8}}>
+                <span style={{fontSize:15,fontWeight:600}}>{label}</span>
+                <span style={{fontSize:15,fontWeight:800,color:"#34C759"}}>{local[key].toLocaleString("nl-NL")} <span style={{fontSize:12,fontWeight:600,color:"rgba(255,255,255,0.4)"}}>{unit}</span></span>
+              </div>
+              <input type="range" min={min} max={max} step={step} value={local[key]}
+                onChange={e=>setLocal({...local,[key]:+e.target.value})}
+                style={{width:"100%",accentColor:"#34C759",height:4}}/>
+              <div style={{display:"flex",justifyContent:"space-between",marginTop:4,fontSize:11,color:"rgba(255,255,255,0.3)"}}>
+                <span>{min.toLocaleString("nl-NL")}</span><span>{max.toLocaleString("nl-NL")}</span>
+              </div>
+            </div>
+          ))}
+          <div style={{marginTop:4,borderTop:"0.5px solid rgba(255,255,255,0.08)",paddingTop:20}}>
+            <div style={{fontSize:13,fontWeight:700,color:"rgba(255,255,255,0.4)",textTransform:"uppercase",letterSpacing:"0.07em",marginBottom:14}}>
+              App-informatie
+            </div>
+            <div style={{display:"flex",justifyContent:"space-between",padding:"10px 0",borderBottom:"0.5px solid rgba(255,255,255,0.07)"}}>
+              <span style={{fontSize:15}}>Versie</span><span style={{fontSize:15,color:"rgba(255,255,255,0.4)"}}>1.0.0</span>
+            </div>
+            <div style={{display:"flex",justifyContent:"space-between",padding:"10px 0",borderBottom:"0.5px solid rgba(255,255,255,0.07)"}}>
+              <span style={{fontSize:15}}>Gebruiker</span><span style={{fontSize:15,color:"rgba(255,255,255,0.4)"}}>Max</span>
+            </div>
+            <div style={{display:"flex",justifyContent:"space-between",padding:"10px 0"}}>
+              <span style={{fontSize:15}}>Data-ingest</span><span style={{fontSize:15,color:"#34C759"}}>Actief</span>
+            </div>
+          </div>
+          <button className="modal-save-btn" onClick={save}>Opslaan</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ─── Info / Debug Modal ─── */
+function InfoModal({onClose}:{onClose:()=>void}){
+  return(
+    <div className="modal-overlay" onClick={onClose}>
+      <div className="modal-sheet" onClick={e=>e.stopPropagation()}>
+        <div className="modal-handle"/>
+        <div className="modal-header">
+          <span className="modal-title">Data-diagnose</span>
+          <button className="modal-done" onClick={onClose}>Sluiten</button>
+        </div>
+        <div className="modal-body">
+          <p style={{fontSize:14,lineHeight:1.65,color:"rgba(255,255,255,0.75)",marginBottom:20}}>
+            Om te controleren welke data Health Auto Export naar de app stuurt, open je deze URL in Safari:
+          </p>
+          <div style={{background:"rgba(255,255,255,0.06)",borderRadius:12,padding:"12px 14px",fontFamily:"monospace",fontSize:12,wordBreak:"break-all",color:"#34C759",marginBottom:20}}>
+            /api/debug?key=weddendatikhetkan4923
+          </div>
+          <p style={{fontSize:13,lineHeight:1.6,color:"rgba(255,255,255,0.5)"}}>
+            Dit toont welke metrieken in de database staan, welke slaapvelden aanwezig zijn, en hoeveel data er is per metriek.
+          </p>
+          <div style={{marginTop:24,borderTop:"0.5px solid rgba(255,255,255,0.08)",paddingTop:20}}>
+            <div style={{fontSize:13,fontWeight:700,color:"rgba(255,255,255,0.4)",textTransform:"uppercase",letterSpacing:"0.07em",marginBottom:14}}>
+              Tips voor Health Auto Export
+            </div>
+            {[
+              "Slaap: zet alle slaap-categorieën aan (Core, Deep, REM, InBed)",
+              "Workouts: zet 'Workouts' aan in de export",
+              "HRV: zit onder 'Heart Rate Variability'",
+              "Stel export in op dagelijks automatisch om 07:00",
+              "Kies REST API als export methode",
+            ].map((tip,i)=>(
+              <div key={i} style={{display:"flex",gap:10,paddingBottom:10,borderBottom:"0.5px solid rgba(255,255,255,0.06)",marginBottom:10}}>
+                <span style={{color:"#34C759",fontWeight:700,fontSize:14}}>{i+1}.</span>
+                <span style={{fontSize:13,color:"rgba(255,255,255,0.7)",lineHeight:1.5}}>{tip}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+    </div>
   );
 }

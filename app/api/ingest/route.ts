@@ -61,9 +61,15 @@ export async function POST(req: NextRequest) {
     if (!start || !end) continue;
     const name = String(w.name ?? "Workout");
     const num = (x: any) => (typeof x === "number" ? x : typeof x?.qty === "number" ? x.qty : null);
+    // HAE stuurt duration in seconden; als > 300 → in seconden → omzetten naar minuten
+    const rawDur = num(w.duration);
+    const durMin = rawDur != null ? (rawDur > 300 ? +(rawDur / 60).toFixed(1) : rawDur) : null;
+    // Energie: HAE stuurt kcal; als > 5000 → kJ → omzetten naar kcal
+    const rawEnergy = num(w.activeEnergyBurned ?? w.activeEnergy ?? w.energy);
+    const energyKcal = rawEnergy != null ? (rawEnergy > 5000 ? +(rawEnergy / 4.184).toFixed(0) : rawEnergy) : null;
     await sql`
       INSERT INTO workout (start, "end", name, duration, energy, distance, avghr, maxhr)
-      VALUES (${start}, ${end}, ${name}, ${num(w.duration)}, ${num(w.activeEnergyBurned ?? w.activeEnergy)},
+      VALUES (${start}, ${end}, ${name}, ${durMin}, ${energyKcal},
               ${num(w.distance)}, ${num(w.avgHeartRate ?? w.heartRateAvg)}, ${num(w.maxHeartRate ?? w.heartRateMax)})
       ON CONFLICT (start, name) DO UPDATE SET
         "end" = excluded."end", duration = excluded.duration, energy = excluded.energy,
@@ -74,3 +80,4 @@ export async function POST(req: NextRequest) {
 
   return NextResponse.json({ ok: true, metrics: rows.length, workouts: savedWorkouts });
 }
+// (unit guard al ingebouwd in ingest — zie hieronder)

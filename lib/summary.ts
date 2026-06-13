@@ -24,15 +24,38 @@ function normalizeSleep(m: Record<string, number>, units: string | null) {
     if (units && /hr|hour|uur/i.test(units)) return v * 60;
     return v < 24 ? v * 60 : v;
   };
-  const deep = conv(pickFirst(m, ["sleep_analysis.deep", "sleep_analysis.deepSleep", "sleep_analysis.deep_sleep"]));
-  const rem = conv(pickFirst(m, ["sleep_analysis.rem", "sleep_analysis.remSleep", "sleep_analysis.rem_sleep"]));
-  const core = conv(pickFirst(m, ["sleep_analysis.core", "sleep_analysis.coreSleep", "sleep_analysis.light", "sleep_analysis.lightSleep"]));
-  const awake = conv(pickFirst(m, ["sleep_analysis.awake"]));
-  const inBed = conv(pickFirst(m, ["sleep_analysis.inBed", "sleep_analysis.in_bed", "sleep_analysis.inBedTime"]));
-  let total = conv(pickFirst(m, ["sleep_analysis.asleep", "sleep_analysis.totalSleep", "sleep_analysis.total_sleep", "sleep_analysis.sleep"]));
-  if (total == null && (deep != null || rem != null || core != null)) {
-    total = (deep ?? 0) + (rem ?? 0) + (core ?? 0);
+  // Health Auto Export (HAE) gebruikt: asleepDeep, asleepREM, asleepCore, asleepUnspecified
+  // Oudere versies: deep, rem, core, asleep — alles ondersteunen
+  const deep = conv(pickFirst(m, [
+    "sleep_analysis.asleepDeep", "sleep_analysis.deep",
+    "sleep_analysis.deepSleep",  "sleep_analysis.deep_sleep",
+  ]));
+  const rem = conv(pickFirst(m, [
+    "sleep_analysis.asleepREM",  "sleep_analysis.rem",
+    "sleep_analysis.remSleep",   "sleep_analysis.rem_sleep",
+  ]));
+  const core = conv(pickFirst(m, [
+    "sleep_analysis.asleepCore",  "sleep_analysis.core",
+    "sleep_analysis.coreSleep",   "sleep_analysis.light",
+    "sleep_analysis.lightSleep",
+  ]));
+  const unspec = conv(pickFirst(m, ["sleep_analysis.asleepUnspecified"]));
+  const awake = conv(pickFirst(m, ["sleep_analysis.awake", "sleep_analysis.Awake"]));
+  const inBed = conv(pickFirst(m, [
+    "sleep_analysis.inBed", "sleep_analysis.InBed",
+    "sleep_analysis.in_bed", "sleep_analysis.inBedTime",
+  ]));
+  let total = conv(pickFirst(m, [
+    "sleep_analysis.asleep",       "sleep_analysis.totalSleep",
+    "sleep_analysis.total_sleep",  "sleep_analysis.sleep",
+  ]));
+  // Als geen expliciete total: som van alle fases (incl. unspecified)
+  if (total == null) {
+    const parts = [deep, rem, core, unspec].filter((v): v is number => v != null);
+    if (parts.length) total = parts.reduce((a, b) => a + b, 0);
   }
+  // Als alleen inBed beschikbaar: gebruik inBed als schatting
+  if (total == null && inBed != null) total = inBed * 0.9;
   if (total != null) m["sleep.total"] = total;
   if (deep != null) m["sleep.deep"] = deep;
   if (rem != null) m["sleep.rem"] = rem;

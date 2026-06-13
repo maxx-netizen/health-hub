@@ -17,14 +17,12 @@ export default function Login() {
   }
 
   return (
-    <form className="login" onSubmit={submit}>
+    <form className="login-wrap" onSubmit={submit}>
       <h1>🩺 Health Hub</h1>
-      <input
-        type="password" placeholder="Wachtwoord" value={password}
-        onChange={(e) => setPassword(e.target.value)} autoFocus
-      />
-      <button type="submit">Inloggen</button>
-      {error && <p style={{ color: "#f87171" }}>{error}</p>}
+      <input className="login-input" type="password" placeholder="Wachtwoord"
+        value={password} onChange={e => setPassword(e.target.value)} autoFocus />
+      <button className="login-btn" type="submit">Inloggen</button>
+      {error && <p style={{ color: "#ff3b30", textAlign: "center" }}>{error}</p>}
     </form>
   );
 }

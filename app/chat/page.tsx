@@ -1,6 +1,5 @@
 "use client";
 import { useState, useRef, useEffect } from "react";
-import TabBar from "@/components/TabBar";
 
 interface Msg { role: "user" | "ai"; content: string; }
 
@@ -13,7 +12,7 @@ const SUGGESTIES = [
 
 export default function Chat() {
   const [messages, setMessages] = useState<Msg[]>([
-    { role: "ai", content: "Hoi Max! 👋 Ik ken al je data van je Helio strap, weegschaal en LARQ-fles. Wat wil je weten?" },
+    { role: "ai", content: "Hoi Max! 👋 Ik ken al je data van je Amazfit Helio strap, weegschaal en LARQ-fles. Stel me gerust een vraag over je gezondheid." },
   ]);
   const [input, setInput] = useState("");
   const [busy, setBusy] = useState(false);
@@ -32,13 +31,13 @@ export default function Chat() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          messages: next.slice(1).map((m) => ({ role: m.role === "ai" ? "assistant" : "user", content: m.content })),
+          messages: next.slice(1).map(m => ({ role: m.role === "ai" ? "assistant" : "user", content: m.content })),
         }),
       });
       const data = await res.json();
-      setMessages((cur) => [...cur, { role: "ai", content: data.reply ?? "Er ging iets mis. Probeer het opnieuw." }]);
+      setMessages(cur => [...cur, { role: "ai", content: data.reply ?? "Er ging iets mis. Probeer opnieuw." }]);
     } catch {
-      setMessages((cur) => [...cur, { role: "ai", content: "Er ging iets mis. Probeer het opnieuw." }]);
+      setMessages(cur => [...cur, { role: "ai", content: "Er ging iets mis. Probeer opnieuw." }]);
     } finally {
       setBusy(false);
     }
@@ -46,31 +45,33 @@ export default function Chat() {
 
   return (
     <div className="container">
-      <div className="header">
-        <div className="date">JOUW PERSOONLIJKE COACH</div>
-        <h1>AI-coach</h1>
+      <div className="app-header">
+        <button className="header-date">✦ AI-coach</button>
+        <a href="/" className="header-icon-btn" style={{ textDecoration: "none" }}>✕</a>
       </div>
-      <div className="chat-box">
-        <div className="msgs">
-          {messages.map((m, i) => (
-            <div key={i} className={`msg ${m.role}`}>{m.content}</div>
-          ))}
-          {busy && <div className="msg ai">Denkt na…</div>}
-          <div ref={bottom} />
-        </div>
-        {messages.length <= 1 && (
-          <div className="chips">
-            {SUGGESTIES.map((s) => (
-              <button key={s} onClick={() => send(s)}>{s}</button>
+      <div className="chat-wrap">
+        <div className="chat-box">
+          <div className="chat-msgs">
+            {messages.map((m, i) => (
+              <div key={i} className={`chat-msg ${m.role}`}>{m.content}</div>
             ))}
+            {busy && <div className="chat-msg ai">Denkt na…</div>}
+            <div ref={bottom} />
           </div>
-        )}
-        <form className="chat-input" onSubmit={(e) => { e.preventDefault(); send(input); }}>
-          <input value={input} onChange={(e) => setInput(e.target.value)} placeholder="Vraag iets over je gezondheid…" disabled={busy} />
-          <button type="submit" disabled={busy}>↑</button>
-        </form>
+          {messages.length <= 1 && (
+            <div className="chat-chips">
+              {SUGGESTIES.map(s => (
+                <button key={s} className="chat-chip" onClick={() => send(s)}>{s}</button>
+              ))}
+            </div>
+          )}
+          <form className="chat-input-row" onSubmit={e => { e.preventDefault(); send(input); }}>
+            <input className="chat-input" value={input} onChange={e => setInput(e.target.value)}
+              placeholder="Stel een vraag…" disabled={busy} autoFocus />
+            <button type="submit" className="chat-send" disabled={busy}>↑</button>
+          </form>
+        </div>
       </div>
-      <TabBar active="chat" />
     </div>
   );
 }

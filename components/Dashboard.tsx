@@ -2,630 +2,579 @@
 import { useState } from "react";
 import {
   ResponsiveContainer, LineChart, Line, BarChart, Bar, XAxis, YAxis,
-  Tooltip, CartesianGrid, Area, AreaChart,
+  Tooltip, CartesianGrid, AreaChart, Area,
 } from "recharts";
 import type { DailyData, Insight } from "@/lib/summary";
 
-// ── Colors ──────────────────────────────────────────
+/* ─── Kleuren ───────────────────────────────────────── */
 const C = {
-  green: "#30d158", blue: "#0a84ff", red: "#ff3b30", orange: "#ff9500",
-  purple: "#5e5ce6", teal: "#5ac8fa", yellow: "#ffd60a",
-  muted: "#8e8e93", border: "#2a2a2a", card3: "#2a2a2a",
+  green:"#34C759", blue:"#0A84FF", red:"#FF3B30", orange:"#FF9F0A",
+  purple:"#AF52DE", teal:"#32ADE6", yellow:"#FFD60A",
+  muted:"rgba(255,255,255,0.45)", border:"rgba(255,255,255,0.08)",
+  track:"#2a2a2e",
 };
-const tt = { background: "#1c1c1e", border: "0.5px solid #2a2a2a", borderRadius: 10, color: "#fff", fontSize: 12 };
+const tt = { background:"#1c1c1e", border:"0.5px solid #38383a", borderRadius:10, color:"#fff", fontSize:12 };
 
-// ── Helpers ─────────────────────────────────────────
-function fmtDay(d: string) {
-  return new Date(d + "T12:00:00").toLocaleDateString("nl-NL", { day: "numeric", month: "short" });
-}
-function fmtMin(min: number | null): string {
-  if (min == null || min <= 0) return "–";
-  const h = Math.floor(min / 60);
-  const m = Math.round(min % 60);
-  return h > 0 ? `${h}u ${m}m` : `${m}m`;
-}
-
-const ICONS: Record<string, string> = {
-  hardlopen:"🏃", running:"🏃", wandelen:"🚶", walking:"🚶", fietsen:"🚴",
-  cycling:"🚴", kracht:"🏋️", strength:"🏋️", traditional:"🏋️", zwemmen:"🏊",
-  swimming:"🏊", yoga:"🧘", hiit:"🔥", elliptical:"🚲", rowing:"🚣", voetbal:"⚽",
-};
-function icon(name: string) {
-  const n = name.toLowerCase();
-  for (const k of Object.keys(ICONS)) if (n.includes(k)) return ICONS[k];
-  return "💪";
-}
-
-// ── SVG Ring ─────────────────────────────────────────
-function Ring({ pct, size = 80, color = C.green, label, sublabel }: {
-  pct: number; size?: number; color?: string; label?: string; sublabel?: string;
-}) {
-  const sw = 8, r = (size - sw) / 2, c = 2 * Math.PI * r;
-  const safe = Math.min(100, Math.max(0, pct));
-  const dash = `${(safe / 100) * c} ${c}`;
+/* ─── SVG Iconen (geen emoji's) ─────────────────────── */
+function Ico({ d, size=24, fill="none", stroke="currentColor", sw=1.7 }:
+  { d:string; size?:number; fill?:string; stroke?:string; sw?:number }) {
   return (
-    <div style={{ display: "flex", flexDirection: "column", alignItems: "center" }}>
-      <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`}>
-        <circle cx={size/2} cy={size/2} r={r} fill="none" stroke={C.card3} strokeWidth={sw} />
-        <circle cx={size/2} cy={size/2} r={r} fill="none" stroke={safe > 0 ? color : C.card3}
-          strokeWidth={sw} strokeLinecap="round" strokeDasharray={dash}
-          transform={`rotate(-90 ${size/2} ${size/2})`} />
-        {label && (
-          <>
-            <text x={size/2} y={size/2 - (sublabel ? 6 : 0)} textAnchor="middle" fill="#fff"
-              fontSize={size > 88 ? 16 : 13} fontWeight="800">{label}</text>
-            {sublabel && (
-              <text x={size/2} y={size/2 + 12} textAnchor="middle" fill={C.muted}
-                fontSize={9} fontWeight="600">{sublabel}</text>
-            )}
-          </>
-        )}
-      </svg>
-    </div>
+    <svg width={size} height={size} viewBox="0 0 24 24" fill={fill}
+      stroke={stroke} strokeWidth={sw} strokeLinecap="round" strokeLinejoin="round">
+      <path d={d}/>
+    </svg>
   );
 }
+const IcoHome    = ({a=false}) => <Ico d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z M9 22V12h6v10" sw={a?2.2:1.5}/>;
+const IcoTrends  = ({a=false}) => <Ico d="M18 20V10M12 20V4M6 20v-6" sw={a?2.2:1.5}/>;
+const IcoHeart   = ({a=false}) => <Ico d="M22 12h-4l-3 9L9 3l-3 9H2" sw={a?2.2:1.5}/>;
+const IcoStar    = ({a=false}) => <Ico d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01z" sw={a?2.2:1.5}/>;
+const IcoPlus    = ()          => <Ico d="M12 5v14M5 12h14" sw={2}/>;
+const IcoFlash   = ()          => <Ico d="M13 2L3 14h9l-1 8 10-12h-9z" fill="currentColor" stroke="none"/>;
+const IcoFire    = ()          => <Ico d="M12 2c0 0-4 4-4 9a4 4 0 0 0 8 0c0-2-1-4-1-4s-1 2-3 2-2-2-2-2 2-5 2-5z" sw={1.5}/>;
+const IcoDrop    = ()          => <Ico d="M12 2.69l5.66 5.66a8 8 0 1 1-11.31 0z" sw={1.5}/>;
+const IcoBell    = ()          => <Ico d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9M13.73 21a2 2 0 0 1-3.46 0" sw={1.5}/>;
+const IcoUser    = ()          => <Ico d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2M12 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8z" sw={1.5}/>;
+const IcoChevron = ()          => <Ico d="M6 9l6 6 6-6" sw={1.8}/>;
+const IcoRight   = ()          => <Ico d="M9 18l6-6-6-6" sw={1.8}/>;
 
-// ── Small Ring with % ─────────────────────────────────
-function PctRing({ pct, size, color }: { pct: number; size: number; color: string }) {
-  const sw = 7, r = (size - sw) / 2, c = 2 * Math.PI * r;
-  const safe = Math.min(100, Math.max(0, pct));
-  const dash = `${(safe / 100) * c} ${c}`;
+/* ─── Helpers ────────────────────────────────────────── */
+function fmtDay(d:string){ return new Date(d+"T12:00:00").toLocaleDateString("nl-NL",{day:"numeric",month:"short"}); }
+function fmtMin(min:number|null){
+  if(!min||min<=0) return "–";
+  const h=Math.floor(min/60), m=Math.round(min%60);
+  return h>0?`${h}u ${m}m`:`${m}m`;
+}
+function colorForPct(p:number){ return p>=70?C.green:p>=40?C.orange:C.red; }
+
+/* ─── Sport icoon → SVG pad ─────────────────────────── */
+function WorkoutIcon({name}:{name:string}){
+  const n=(name||"").toLowerCase();
+  let d="M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20"; // default: cirkel
+  if(n.includes("run")||n.includes("looop")||n.includes("hardloop")) d="M13 4a1 1 0 1 0 0-2 1 1 0 0 0 0 2M6 17l4-8 2 3 2-2 2 5";
+  else if(n.includes("walk")||n.includes("wande")) d="M13 4a1 1 0 1 0 0-2 1 1 0 0 0 0 2M9 18l2-8 3 3M15 6l-3 5-3-1";
+  else if(n.includes("fiet")||n.includes("cycl")) d="M5 19a2 2 0 1 0 4 0 2 2 0 0 0-4 0M15 19a2 2 0 1 0 4 0 2 2 0 0 0-4 0M12 8h4l2 8-5-4-3 5-3-4 2-5z";
+  else if(n.includes("zwem")||n.includes("swim")) d="M2 12c2-3 4-3 6 0s4 3 6 0 4-3 6 0M2 17c2-3 4-3 6 0s4 3 6 0 4-3 6 0";
+  else if(n.includes("kracht")||n.includes("strength")||n.includes("tradit")) d="M6 4v16M18 4v16M2 12h20M2 7h4M18 7h4M2 17h4M18 17h4";
+  else if(n.includes("yoga")) d="M12 2c0 0-4 6-4 10a4 4 0 0 0 8 0c0-4-4-10-4-10z";
+  else if(n.includes("hiit")) d="M13 2L3 14h9l-1 8 10-12h-9z";
   return (
-    <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`}>
-      <circle cx={size/2} cy={size/2} r={r} fill="none" stroke="rgba(255,255,255,0.18)" strokeWidth={sw} />
-      <circle cx={size/2} cy={size/2} r={r} fill="none" stroke={safe > 0 ? "rgba(255,255,255,0.85)" : "rgba(255,255,255,0.18)"}
-        strokeWidth={sw} strokeLinecap="round" strokeDasharray={dash}
-        transform={`rotate(-90 ${size/2} ${size/2})`} />
-      <text x={size/2} y={size/2 + 5} textAnchor="middle" fill="#fff" fontSize="12" fontWeight="800">
-        {Math.round(safe)}%
-      </text>
+    <svg width={22} height={22} viewBox="0 0 24 24" fill="none"
+      stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round">
+      <path d={d}/>
     </svg>
   );
 }
 
-// ── Main component ────────────────────────────────────
-export default function Dashboard({ daily, workouts, insights, dayScore }: {
-  daily: DailyData; workouts: any[]; insights: Insight[];
-  dayScore: { score: number; parts: { label: string; pct: number }[] } | null;
-}) {
-  const [tab, setTab] = useState<"home" | "trends" | "activiteit">("home");
-  const [range, setRange] = useState(30);
+/* ─── Ring component ─────────────────────────────────── */
+function Ring({pct,size=80,color=C.green,children}:{pct:number;size?:number;color?:string;children?:React.ReactNode}){
+  const sw=7, r=(size-sw)/2, circ=2*Math.PI*r;
+  const safe=Math.min(100,Math.max(0,pct));
+  return(
+    <div style={{position:"relative",width:size,height:size}}>
+      <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`}>
+        <circle cx={size/2} cy={size/2} r={r} fill="none" stroke={C.track} strokeWidth={sw}/>
+        {safe>0&&<circle cx={size/2} cy={size/2} r={r} fill="none" stroke={color}
+          strokeWidth={sw} strokeLinecap="round"
+          strokeDasharray={`${(safe/100)*circ} ${circ}`}
+          transform={`rotate(-90 ${size/2} ${size/2})`}/>}
+      </svg>
+      <div style={{position:"absolute",inset:0,display:"flex",flexDirection:"column",
+        alignItems:"center",justifyContent:"center",textAlign:"center"}}>
+        {children}
+      </div>
+    </div>
+  );
+}
 
-  const allDays = Object.keys(daily).sort();
-  const days = allDays.slice(-range);
+/* ─── Kleine ring voor Photo Card ───────────────────── */
+function SmallRing({pct,size=64}:{pct:number;size?:number}){
+  const sw=5, r=(size-sw)/2, circ=2*Math.PI*r;
+  const safe=Math.min(100,Math.max(0,pct));
+  return(
+    <div style={{position:"relative",width:size,height:size}}>
+      <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`}>
+        <circle cx={size/2} cy={size/2} r={r} fill="none" stroke="rgba(255,255,255,0.2)" strokeWidth={sw}/>
+        {safe>0&&<circle cx={size/2} cy={size/2} r={r} fill="none" stroke="rgba(255,255,255,0.9)"
+          strokeWidth={sw} strokeLinecap="round"
+          strokeDasharray={`${(safe/100)*circ} ${circ}`}
+          transform={`rotate(-90 ${size/2} ${size/2})`}/>}
+      </svg>
+      <div style={{position:"absolute",inset:0,display:"flex",alignItems:"center",justifyContent:"center",
+        fontSize:13,fontWeight:800,color:"#fff"}}>{Math.round(safe)}%</div>
+    </div>
+  );
+}
 
-  const rows = days.map((d) => {
-    const m = daily[d] ?? {};
-    const v = (k: string, f = 1, dec = 1) => (m[k] != null ? +((m[k] * f).toFixed(dec)) : null);
-    return {
-      day: fmtDay(d),
-      slaap: v("sleep.total", 1/60), diep: v("sleep.deep", 1/60),
-      rem: v("sleep.rem", 1/60), licht: v("sleep.core", 1/60),
-      hrv: v("heart_rate_variability.qty", 1, 0), rusthr: v("resting_heart_rate.qty", 1, 0),
-      stappen: v("step_count.qty", 1, 0), water: v("dietary_water.qty", 1, 0),
-      gewicht: v("weight_body_mass.qty"), vet: v("body_fat_percentage.qty"),
-      spier: v("lean_body_mass.qty"), kcal: v("active_energy.qty", 1, 0),
+/* ─── Main component ─────────────────────────────────── */
+export default function Dashboard({daily,workouts,insights,dayScore}:{
+  daily:DailyData; workouts:any[]; insights:Insight[];
+  dayScore:{score:number;parts:{label:string;pct:number}[]}|null;
+}){
+  const [tab,setTab]=useState<"home"|"trends"|"activiteit">("home");
+  const [range,setRange]=useState(30);
+
+  const allDays=Object.keys(daily).sort();
+  const days=allDays.slice(-range);
+
+  const rows=days.map(d=>{
+    const m=daily[d]??{};
+    const v=(k:string,f=1,dec=1)=>(m[k]!=null?+((m[k]*f).toFixed(dec)):null);
+    return{
+      day:fmtDay(d),
+      slaap:v("sleep.total",1/60), diep:v("sleep.deep",1/60),
+      rem:v("sleep.rem",1/60), licht:v("sleep.core",1/60),
+      hrv:v("heart_rate_variability.qty",1,0), rusthr:v("resting_heart_rate.qty",1,0),
+      stappen:v("step_count.qty",1,0), water:v("dietary_water.qty",1,0),
+      gewicht:v("weight_body_mass.qty"), vet:v("body_fat_percentage.qty"),
+      spier:v("lean_body_mass.qty"), kcal:v("active_energy.qty",1,0),
     };
   });
 
-  const latest = (key: keyof typeof rows[0]) => {
-    for (let i = rows.length - 1; i >= 0; i--) if (rows[i][key] != null) return rows[i][key] as number;
+  const latest=(key:keyof typeof rows[0])=>{
+    for(let i=rows.length-1;i>=0;i--) if(rows[i][key]!=null) return rows[i][key] as number;
     return null;
   };
-  const prev = (key: keyof typeof rows[0]) => {
-    let n = 0;
-    for (let i = rows.length - 1; i >= 0; i--) if (rows[i][key] != null && ++n === 2) return rows[i][key] as number;
+  const prev=(key:keyof typeof rows[0])=>{
+    let n=0;
+    for(let i=rows.length-1;i>=0;i--) if(rows[i][key]!=null&&++n===2) return rows[i][key] as number;
     return null;
   };
 
-  const today = new Date().toLocaleDateString("nl-NL", { day: "numeric", month: "long" });
-  const weekWorkouts = workouts.filter(w => new Date(w.start) > new Date(Date.now() - 7*86400000));
+  const today=new Date().toLocaleDateString("nl-NL",{day:"numeric",month:"long"});
+  const weekWorkouts=workouts.filter(w=>new Date(w.start)>new Date(Date.now()-7*86400000));
 
-  // Compute ring percentages
-  const latestHRV = latest("hrv");
-  const baseHRVs = rows.slice(-30, -1).map(r => r.hrv).filter(v => v != null) as number[];
-  const avgHRV = baseHRVs.length ? baseHRVs.reduce((a, b) => a + b, 0) / baseHRVs.length : 50;
-  const herstelPct = latestHRV ? Math.min(100, Math.round((latestHRV / (avgHRV * 1.2)) * 100)) : 0;
-  const stappenToday = latest("stappen") ?? 0;
-  const inspanningPct = Math.min(100, Math.round((stappenToday / 8000) * 100));
-  const waterToday = latest("water") ?? 0;
-  const voedingPct = Math.min(100, Math.round((waterToday / 2000) * 100));
+  /* Recovery ring: HRV vs 30d baseline */
+  const latestHRV=latest("hrv");
+  const baseHRVs=rows.slice(-30,-1).map(r=>r.hrv).filter((v):v is number=>v!=null);
+  const avgHRV=baseHRVs.length?baseHRVs.reduce((a,b)=>a+b,0)/baseHRVs.length:50;
+  const herstelPct=latestHRV?Math.min(100,Math.round((latestHRV/(avgHRV*1.2))*100)):0;
+  const stappenPct=Math.min(100,Math.round(((latest("stappen")??0)/8000)*100));
+  const waterPct=Math.min(100,Math.round(((latest("water")??0)/2000)*100));
+  const slaapMin=latest("slaap")?Math.round((latest("slaap") as number)*60):null;
+  const slaapPct=slaapMin?Math.min(100,Math.round((slaapMin/480)*100)):0;
 
-  // Sleep data
-  const sleepTotal = latest("slaap"); // hours
-  const sleepTotalMin = sleepTotal ? Math.round(sleepTotal * 60) : null;
-  const sleepDeep = latest("diep");
-  const sleepDeepMin = sleepDeep ? Math.round(sleepDeep * 60) : null;
-  const sleepREM = latest("rem");
-  const sleepREMMin = sleepREM ? Math.round(sleepREM * 60) : null;
-  const sleepLight = latest("licht");
-  const sleepLightMin = sleepLight ? Math.round(sleepLight * 60) : null;
-  const sleepPct = sleepTotalMin ? Math.min(100, Math.round((sleepTotalMin / 480) * 100)) : 0;
+  const hrvVals=rows.map(r=>r.hrv).filter((v):v is number=>v!=null);
+  const hrvMax=hrvVals.length?Math.max(...hrvVals):null;
+  const hrvMin=hrvVals.length?Math.min(...hrvVals):null;
+  const hrvAvg=hrvVals.length?Math.round(hrvVals.reduce((a,b)=>a+b,0)/hrvVals.length):null;
 
-  // HRV stats
-  const hrvVals = rows.map(r => r.hrv).filter(v => v != null) as number[];
-  const hrvMax = hrvVals.length ? Math.max(...hrvVals) : null;
-  const hrvMin = hrvVals.length ? Math.min(...hrvVals) : null;
-  const hrvAvg = hrvVals.length ? Math.round(hrvVals.reduce((a,b) => a+b, 0) / hrvVals.length) : null;
-
-  const noData = !allDays.length;
-
-  if (noData) {
-    return (
+  if(!allDays.length){
+    return(
       <div className="container">
-        <AppHeader today={today} onAI={() => window.location.href = "/chat"} />
+        <AppHeader today={today}/>
         <div className="empty-state">
-          <div style={{ fontSize: 48, marginBottom: 16 }}>📡</div>
+          <svg width={56} height={56} viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.3)" strokeWidth={1.2} style={{marginBottom:20}}>
+            <path d="M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20zM12 8v4M12 16h.01"/>
+          </svg>
           <h2>Nog geen data</h2>
-          <p>Zodra Health Auto Export pusht naar <code>/api/ingest</code> verschijnt hier alles.</p>
+          <p>Zodra Health Auto Export pusht naar<br/><code>/api/ingest</code> verschijnt hier alles.</p>
         </div>
-        <SonarTabBar tab={tab} onTab={setTab} />
+        <TabBar tab={tab} onTab={setTab}/>
       </div>
     );
   }
 
-  return (
+  return(
     <div className="container">
-      <AppHeader today={today} onAI={() => window.location.href = "/chat"} />
-
-      {tab === "home" && (
-        <HomeTab
-          herstelPct={herstelPct} inspanningPct={inspanningPct} voedingPct={voedingPct}
-          latestHRV={latestHRV} hrvMax={hrvMax} hrvMin={hrvMin} hrvAvg={hrvAvg}
-          sleepPct={sleepPct} sleepTotalMin={sleepTotalMin} sleepDeepMin={sleepDeepMin}
-          sleepREMMin={sleepREMMin} sleepLightMin={sleepLightMin}
-          stappenToday={stappenToday} waterToday={waterToday} weekWorkouts={weekWorkouts}
-          workouts={workouts} insights={insights} latest={latest} prev={prev}
-          onAI={() => window.location.href = "/chat"}
-        />
-      )}
-
-      {tab === "trends" && (
-        <TrendsTab rows={rows} range={range} setRange={setRange}
-          herstelPct={herstelPct} inspanningPct={inspanningPct} voedingPct={voedingPct}
-          latest={latest} prev={prev}
-        />
-      )}
-
-      {tab === "activiteit" && (
-        <ActiviteitTab workouts={workouts} weekWorkouts={weekWorkouts}
-          latest={latest} prev={prev}
-        />
-      )}
-
-      <SonarTabBar tab={tab} onTab={setTab} />
+      <AppHeader today={today}/>
+      {tab==="home"&&<HomeTab
+        herstelPct={herstelPct} stappenPct={stappenPct} waterPct={waterPct}
+        latestHRV={latestHRV} hrvMax={hrvMax} hrvMin={hrvMin} hrvAvg={hrvAvg}
+        slaapPct={slaapPct} slaapMin={slaapMin}
+        deepMin={latest("diep")?Math.round((latest("diep") as number)*60):null}
+        remMin={latest("rem")?Math.round((latest("rem") as number)*60):null}
+        lightMin={latest("licht")?Math.round((latest("licht") as number)*60):null}
+        latest={latest} prev={prev}
+        weekWorkouts={weekWorkouts} workouts={workouts} insights={insights}
+        onAI={()=>window.location.href="/chat"}
+      />}
+      {tab==="trends"&&<TrendsTab rows={rows} range={range} setRange={setRange}
+        herstelPct={herstelPct} stappenPct={stappenPct} waterPct={waterPct} slaapPct={slaapPct}
+        latest={latest} prev={prev}
+      />}
+      {tab==="activiteit"&&<ActiviteitTab workouts={workouts} weekWorkouts={weekWorkouts}
+        latest={latest} prev={prev}
+      />}
+      <TabBar tab={tab} onTab={setTab}/>
     </div>
   );
 }
 
-// ── App Header ───────────────────────────────────────
-function AppHeader({ today, onAI }: { today: string; onAI: () => void }) {
-  return (
+/* ─── App Header ─────────────────────────────────────── */
+function AppHeader({today}:{today:string}){
+  return(
     <div className="app-header">
-      <button className="header-date">
-        📅 Vandaag, {today} ▾
-      </button>
-      <div className="header-icons">
-        <button className="header-icon-btn">👤</button>
-        <button className="header-icon-btn">🔔</button>
+      <div className="header-left">
+        <button className="header-date-pill">
+          <svg width={13} height={13} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+          Vandaag, {today}
+          <span style={{opacity:.6}}><IcoChevron/></span>
+        </button>
+      </div>
+      <div className="header-right">
+        <button className="header-icon-btn"><IcoUser/></button>
+        <button className="header-icon-btn"><IcoBell/></button>
       </div>
     </div>
   );
 }
 
-// ── Home Tab ─────────────────────────────────────────
-function HomeTab({ herstelPct, inspanningPct, voedingPct, latestHRV, hrvMax, hrvMin, hrvAvg,
-  sleepPct, sleepTotalMin, sleepDeepMin, sleepREMMin, sleepLightMin,
-  stappenToday, waterToday, weekWorkouts, workouts, insights, latest, prev, onAI }: any) {
-
-  const lastScore = latestHRV != null
-    ? `Je herstel vandaag is ${herstelPct}% op basis van je HRV.`
-    : "Synchroniseer je Amazfit om gepersonaliseerde inzichten te zien.";
-
-  return (
+/* ─── Home Tab ───────────────────────────────────────── */
+function HomeTab({herstelPct,stappenPct,waterPct,latestHRV,hrvMax,hrvMin,hrvAvg,
+  slaapPct,slaapMin,deepMin,remMin,lightMin,latest,prev,weekWorkouts,workouts,insights,onAI}:any){
+  return(
     <>
       {/* Hero */}
       <div className="hero">
-        <div className="hero-bg" />
+        <div className="hero-bg"/>
+        <div className="hero-eyebrow">JOUW OVERZICHT</div>
         <div className="hero-title">
-          {latestHRV ? "Goedemorgen, Max! 👋" : "We verzamelen\nje gegevens."}
+          {latestHRV?"Goedemorgen, Max":"We verzamelen\nje gegevens."}
         </div>
-        <div className="hero-sub">{lastScore}</div>
-        <button className="ai-btn" onClick={onAI}>
-          <span>✦</span> Vraag het aan AI-coach
+        <button className="ai-cta-btn" onClick={onAI}>
+          <IcoStar a={false}/> Vraag het aan AI-coach
         </button>
       </div>
 
-      {/* Three Rings */}
+      {/* Drie ringen */}
       <div className="three-rings">
-        <div className="ring-item">
-          <div className="ring-label">⚡ Herstel</div>
-          <Ring pct={herstelPct} size={80} color={C.green}
-            label={`${herstelPct}%`} />
+        <div className="ring-col">
+          <div className="ring-lbl"><IcoFlash/> Herstel</div>
+          <Ring pct={herstelPct} size={78} color={colorForPct(herstelPct)}>
+            <div className="ring-pct">{herstelPct}%</div>
+          </Ring>
         </div>
-        <div className="ring-item" style={{ flex: 1.3 }}>
-          <div className="ring-label">🔥 Inspanning</div>
-          <Ring pct={inspanningPct} size={96} color={C.orange}
-            label={`${inspanningPct}%`} />
+        <div className="ring-col ring-col-center">
+          <div className="ring-lbl"><IcoFire/> Inspanning</div>
+          <Ring pct={stappenPct} size={96} color={colorForPct(stappenPct)}>
+            <div className="ring-pct ring-pct-lg">{stappenPct}%</div>
+          </Ring>
         </div>
-        <div className="ring-item">
-          <div className="ring-label">💧 Voeding</div>
-          <Ring pct={voedingPct} size={80} color={C.teal}
-            label={`${voedingPct}%`} />
-        </div>
-      </div>
-
-      {/* Goals / Load */}
-      <div className="section">
-        <div className="section-title">
-          Belastingsdoel <span className="section-chevron">›</span>
-        </div>
-        <div className="sonar-card">
-          <div className="load-goal-text">
-            Houd de inspanning van vandaag binnen een gezond bereik.
-          </div>
-          <div className="goal-bars">
-            <GoalBar label="🚶 Stappen" value={stappenToday} goal={8000} unit="" color={C.green} />
-            <GoalBar label="💧 Water" value={waterToday} goal={2000} unit=" ml" color={C.teal} />
-            <GoalBar label="🏋️ Workouts deze week" value={weekWorkouts.length} goal={4} unit="" color={C.orange} />
-          </div>
+        <div className="ring-col">
+          <div className="ring-lbl"><IcoDrop/> Voeding</div>
+          <Ring pct={waterPct} size={78} color={colorForPct(waterPct)}>
+            <div className="ring-pct">{waterPct}%</div>
+          </Ring>
         </div>
       </div>
 
-      {/* Energy / HRV */}
-      <div className="section" style={{ marginTop: 8 }}>
-        <div className="section-title">
-          Energie en stress <span className="section-chevron">›</span>
-        </div>
-        <div className="sonar-card">
-          <div className="energy-top">
-            <span className="energy-icon">🔋</span>
-            <div className="energy-bar">
-              <div className="energy-bar-fill" style={{ width: `${Math.min(100, (latestHRV ?? 0) / 100 * 100)}%` }} />
+      {/* Dagelijkse doelen */}
+      <SectionHeader title="Dagelijkse doelen" action="Bewerken"/>
+      <div className="goals-grid">
+        <GoalCard label="Stappen" value={latest("stappen")} goal={8000} unit="stappen" color={C.green}/>
+        <GoalCard label="Actieve calorieën" value={latest("kcal")} goal={500} unit="cal" color={C.orange}/>
+        <GoalCard label="Tijd geslapen" value={slaapMin} goal={480} unit="min" color={C.purple}/>
+        <GoalCard label="Water" value={latest("water")} goal={2000} unit="ml" color={C.teal}/>
+      </div>
+
+      {/* Energie & stress (HRV) */}
+      <SectionHeader title="Energie en stress"/>
+      <div className="sonar-card energy-card">
+        <div className="energy-header">
+          <div>
+            <div className="energy-value">{latestHRV??<span style={{color:C.muted}}>–</span>}
+              <span className="energy-unit">{latestHRV?" ms":""}</span>
             </div>
+            <div className="energy-label">Hartslagvariabiliteit (HRV)</div>
           </div>
-          {latestHRV ? (
-            <>
-              <div className="energy-big">
-                {latestHRV}<span className="energy-unit"> ms</span>
+          <div className="energy-dots">
+            {[...Array(20)].map((_,i)=>{
+              const filled=latestHRV&&i<Math.round((latestHRV/100)*20);
+              return<div key={i} style={{width:4,height:4,borderRadius:2,
+                background:filled?"#fff":"rgba(255,255,255,0.12)",margin:"0 1.5px"}}/>;
+            })}
+          </div>
+        </div>
+        <div className="energy-stats">
+          <div className="energy-stat"><div className="energy-stat-val">{hrvMax??<span style={{color:C.muted}}>–</span>}</div><div className="energy-stat-lbl">Max</div></div>
+          <div className="energy-stat-div"/>
+          <div className="energy-stat"><div className="energy-stat-val">{hrvMin??<span style={{color:C.muted}}>–</span>}</div><div className="energy-stat-lbl">Min</div></div>
+          <div className="energy-stat-div"/>
+          <div className="energy-stat"><div className="energy-stat-val">{hrvAvg??<span style={{color:C.muted}}>–</span>}</div><div className="energy-stat-lbl">Gemiddeld</div></div>
+        </div>
+      </div>
+
+      {/* Slaap */}
+      <SectionHeader title="Slaap"/>
+      <div className="sonar-card">
+        <div className="sleep-row">
+          <div className="sleep-left">
+            <Ring pct={slaapPct} size={92} color={C.purple}>
+              <div style={{fontSize:16,fontWeight:800,letterSpacing:-0.5}}>
+                {slaapMin ? `${Math.floor(slaapMin/60)}u` : "–"}
               </div>
-              <div style={{ fontSize: 12, color: "#8e8e93", marginBottom: 10 }}>HRV – Hartslag Variabiliteit</div>
-              <div className="energy-stats">
-                <div className="energy-stat"><div className="energy-stat-val">{hrvMax ?? "–"}</div><div className="energy-stat-lbl">Max</div></div>
-                <div className="energy-stat"><div className="energy-stat-val">{hrvMin ?? "–"}</div><div className="energy-stat-lbl">Min</div></div>
-                <div className="energy-stat"><div className="energy-stat-val">{hrvAvg ?? "–"}</div><div className="energy-stat-lbl">Gem</div></div>
-              </div>
-            </>
-          ) : (
-            <div style={{ color: "#8e8e93", fontSize: 14, textAlign: "center", padding: "8px 0" }}>Geen HRV-data beschikbaar</div>
-          )}
+              {slaapMin&&<div style={{fontSize:11,color:C.muted,fontWeight:600}}>
+                {slaapMin%60}m
+              </div>}
+            </Ring>
+            <div className="sleep-sublabel">Gebruikelijk bereik</div>
+          </div>
+          <div className="sleep-phases">
+            <PhaseRow label="Diepe slaap"   min={deepMin}  max={slaapMin??480} color={C.purple}/>
+            <PhaseRow label="REM-slaap"     min={remMin}   max={slaapMin??480} color={C.teal}/>
+            <PhaseRow label="Lichte slaap"  min={lightMin} max={slaapMin??480} color={C.blue}/>
+          </div>
         </div>
       </div>
 
-      {/* Sleep */}
-      <div className="section" style={{ marginTop: 8 }}>
-        <div className="section-title">
-          Slaap <span className="section-chevron">›</span>
-        </div>
-        <div className="sonar-card">
-          <div className="sleep-row">
-            <div className="sleep-left">
-              <Ring pct={sleepPct} size={90} color={C.purple}
-                label={sleepTotalMin ? `${Math.floor(sleepTotalMin/60)}u` : "–"}
-                sublabel={sleepTotalMin ? `${sleepTotalMin % 60}m` : "geen data"} />
-              <div className="sleep-sublabel">Gebruikelijk bereik</div>
-            </div>
-            <div className="sleep-phases">
-              <SleepPhase label="Diepe slaap" min={sleepDeepMin} max={sleepTotalMin ?? 480} color={C.purple} />
-              <SleepPhase label="REM-slaap" min={sleepREMMin} max={sleepTotalMin ?? 480} color={C.teal} />
-              <SleepPhase label="Lichte slaap" min={sleepLightMin} max={sleepTotalMin ?? 480} color={C.blue} />
-              <SleepPhase label="Wakker" min={null} max={480} color={C.orange} />
-            </div>
-          </div>
-        </div>
+      {/* Vitale trends */}
+      <SectionHeader title="Vitale trends"/>
+      <div className="vitals-grid">
+        <VitalCard label="Hartslagvariabiliteit" value={latest("hrv")} unit="ms" prev={prev("hrv")} higherBetter/>
+        <VitalCard label="Rusthartslag" value={latest("rusthr")} unit="bpm" prev={prev("rusthr")} higherBetter={false}/>
+        <VitalCard label="Gewicht" value={latest("gewicht")} unit="kg" prev={prev("gewicht")}/>
+        <VitalCard label="Spiermassa" value={latest("spier")} unit="kg" prev={prev("spier")} higherBetter/>
       </div>
 
       {/* Training */}
-      <div className="section" style={{ marginTop: 8, marginBottom: 8 }}>
-        <div className="section-title">
-          Training <span className="section-chevron">›</span>
-        </div>
-        <div className="sonar-card">
-          {workouts.length > 0 ? (
-            workouts.slice(-5).reverse().map((w, i) => (
-              <WorkoutItem key={i} w={w} />
-            ))
-          ) : (
-            <div style={{ color: "#8e8e93", fontSize: 14, textAlign: "center", padding: "8px 0" }}>
-              Geen workouts gevonden
-            </div>
-          )}
-        </div>
+      <SectionHeader title="Training"/>
+      <div className="sonar-card">
+        {workouts.length>0?workouts.slice(-5).reverse().map((w:any,i:number)=>(
+          <WorkoutRow key={i} w={w}/>
+        )):(
+          <EmptySection msg="Geen workouts gevonden"/>
+        )}
       </div>
 
-      {/* Insights */}
-      {insights.length > 0 && (
-        <div className="section">
-          <div className="section-title">Inzichten</div>
-          <div className="sonar-card">
-            {insights.map((ins: any, i: number) => (
-              <div className="insight-item" key={i}>
-                <span style={{ fontSize: 18 }}>{ins.emoji}</span>
-                <span style={{ fontSize: 14, lineHeight: 1.45 }}>{ins.text}</span>
-              </div>
-            ))}
-          </div>
+      {/* Inzichten */}
+      {insights.length>0&&<>
+        <SectionHeader title="Inzichten"/>
+        <div className="sonar-card">
+          {insights.map((ins:any,i:number)=>(
+            <div className="insight-row" key={i}>
+              <div className="insight-dot" style={{background:C.blue}}/>
+              <div className="insight-text">{ins.text}</div>
+            </div>
+          ))}
         </div>
-      )}
+      </>}
     </>
   );
 }
 
-// ── Trends Tab ───────────────────────────────────────
-function TrendsTab({ rows, range, setRange, herstelPct, inspanningPct, voedingPct, latest, prev }: any) {
-  const latestHRV = latest("hrv");
-  const latestSlaap = latest("slaap");
-  const latestStappen = latest("stappen");
-  const latestGewicht = latest("gewicht");
-  const latestVet = latest("vet");
-  const latestSpier = latest("spier");
+/* ─── Trends Tab ─────────────────────────────────────── */
+function TrendsTab({rows,range,setRange,herstelPct,stappenPct,waterPct,slaapPct,latest,prev}:any){
+  const [filter,setFilter]=useState("alles");
+  const filters=["Alles","Activiteit","Slaap","Herstel","Lichaam"];
+  const latestHRV=latest("hrv"), latestSlaap=latest("slaap");
 
-  const fitnessScore = Math.round((inspanningPct + Math.min(100, (latestStappen ?? 0) / 80)) / 2);
-  const sleepScore = latestSlaap ? Math.min(100, Math.round((latestSlaap * 60 / 480) * 100)) : 0;
-  const herstelScore = herstelPct;
-
-  return (
+  return(
     <>
-      {/* Segment */}
-      <div className="segment">
-        {[7, 30, 90].map(r => (
-          <button key={r} className={range === r ? "active" : ""} onClick={() => setRange(r)}>
-            {r}d
-          </button>
+      {/* Filter tabs */}
+      <div className="filter-scroll">
+        {filters.map(f=>(
+          <button key={f} className={`filter-pill${filter===f?" active":""}`}
+            onClick={()=>setFilter(f)}>{f}</button>
         ))}
       </div>
 
-      {/* Weekly Bar Chart */}
-      <div className="section" style={{ marginBottom: 8 }}>
-        <div className="section-title">Stappen {range}d</div>
-        <div className="sonar-card" style={{ padding: "14px 8px 8px" }}>
+      {/* Tijdrange */}
+      <div className="segment">
+        {[7,14,30,90].map(r=>(
+          <button key={r} className={range===r?"active":""} onClick={()=>setRange(r)}>{r}d</button>
+        ))}
+      </div>
+
+      {/* Wekelijks voortgangsrapport */}
+      <SectionHeader title="Wekelijks voortgangsrapport"/>
+      <div className="photo-cards">
+        <PhotoCard title="Fitness" sub={`${(latest("stappen")??0).toLocaleString("nl-NL")} stappen · ${latest("kcal")??0} kcal`} pct={stappenPct} gradient="linear-gradient(120deg,#0d1f0d,#0a150a)"/>
+        <PhotoCard title="Slaap" sub={`${fmtMin(latestSlaap?Math.round(latestSlaap*60):null)} geslapen`} pct={slaapPct} gradient="linear-gradient(120deg,#0d0d2e,#080820)"/>
+        <PhotoCard title="Herstel" sub={`HRV ${latestHRV??"–"} ms · Rust-HR ${latest("rusthr")??"–"} bpm`} pct={herstelPct} gradient="linear-gradient(120deg,#1f100d,#150800)"/>
+      </div>
+
+      {/* Statistieken vergelijken */}
+      <SectionHeader title="Statistieken vergelijken"/>
+      <div className="sonar-card" style={{padding:"14px 16px"}}>
+        <div className="compare-chips">
+          {["Stappen","HRV","Slaap","Gewicht"].map(c=>(
+            <button key={c} className="compare-chip">{c}</button>
+          ))}
+        </div>
+        <div style={{marginTop:12}}>
           <ResponsiveContainer width="100%" height={140}>
-            <BarChart data={rows} margin={{ left: 0, right: 0, top: 0, bottom: 0 }}>
-              <CartesianGrid stroke={C.border} vertical={false} />
-              <XAxis dataKey="day" tick={{ fill: C.muted, fontSize: 9 }} interval="preserveStartEnd" axisLine={false} tickLine={false} />
-              <YAxis tick={{ fill: C.muted, fontSize: 9 }} width={30} axisLine={false} tickLine={false} />
-              <Tooltip contentStyle={tt} />
-              <Bar dataKey="stappen" name="Stappen" fill={C.green} radius={[4,4,0,0]} />
-            </BarChart>
+            <AreaChart data={rows} margin={{left:0,right:0,top:4,bottom:0}}>
+              <CartesianGrid stroke="rgba(255,255,255,0.05)" vertical={false}/>
+              <XAxis dataKey="day" tick={{fill:"rgba(255,255,255,0.4)",fontSize:9}} axisLine={false} tickLine={false} interval="preserveStartEnd"/>
+              <YAxis tick={{fill:"rgba(255,255,255,0.4)",fontSize:9}} width={28} axisLine={false} tickLine={false}/>
+              <Tooltip contentStyle={tt}/>
+              <Area dataKey="stappen" name="Stappen" stroke={C.green} fill={C.green} fillOpacity={0.15} strokeWidth={2} connectNulls dot={false}/>
+            </AreaChart>
           </ResponsiveContainer>
         </div>
       </div>
 
-      {/* Weekly Report Cards */}
-      <div className="section" style={{ marginBottom: 8 }}>
-        <div className="section-title">Wekelijks voortgangsrapport</div>
-        <div className="photo-cards">
-          <PhotoCard
-            title="Fitness"
-            sub={`Stappen: ${(latest("stappen") ?? 0).toLocaleString("nl-NL")} • Kcal: ${latest("kcal") ?? "–"}`}
-            pct={fitnessScore}
-            gradient="linear-gradient(135deg, #1a2a1a 0%, #0a1a0a 100%)"
-            accent={C.green}
-          />
-          <PhotoCard
-            title="Slaap"
-            sub={`Totaal: ${fmtMin(latestSlaap ? Math.round(latestSlaap * 60) : null)} slaap`}
-            pct={sleepScore}
-            gradient="linear-gradient(135deg, #0d1a2a 0%, #060d1a 100%)"
-            accent={C.purple}
-          />
-          <PhotoCard
-            title="Herstel"
-            sub={`HRV: ${latestHRV ?? "–"} ms • Rust-HR: ${latest("rusthr") ?? "–"} bpm`}
-            pct={herstelScore}
-            gradient="linear-gradient(135deg, #1a1a0d 0%, #0d0d06 100%)"
-            accent={C.orange}
-          />
-        </div>
-      </div>
-
       {/* Meer verkennen */}
-      <div className="section-title" style={{ padding: "0 20px", marginBottom: 10 }}>
-        Meer verkennen
-      </div>
+      <SectionHeader title="Meer verkennen"/>
       <div className="explore-scroll">
         {[
-          { emoji: "❤️", label: "Hartslagvari­abiliteit" },
-          { emoji: "😴", label: "Slaap­score" },
-          { emoji: "🌙", label: "Slaap­duur" },
-          { emoji: "⚖️", label: "Gewicht" },
-          { emoji: "🏃", label: "Stappen" },
-          { emoji: "🔥", label: "Calorieën" },
-          { emoji: "💧", label: "Water" },
-          { emoji: "💪", label: "Spiermassa" },
-        ].map((e, i) => (
+          {ico:<IcoHeart/>,lbl:"HRV"},
+          {ico:<svg width={22} height={22} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.7} strokeLinecap="round"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 0c0 5-4 9-4 14M12 2c0 5 4 9 4 14"/></svg>,lbl:"Slaap­score"},
+          {ico:<svg width={22} height={22} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.7} strokeLinecap="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>,lbl:"Slaap­duur"},
+          {ico:<svg width={22} height={22} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.7} strokeLinecap="round"><path d="M12 2.69l5.66 5.66a8 8 0 1 1-11.31 0z"/></svg>,lbl:"Water"},
+          {ico:<IcoTrends/>,lbl:"Gewicht"},
+          {ico:<svg width={22} height={22} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.7} strokeLinecap="round"><rect x="2" y="7" width="20" height="15" rx="2"/><path d="M16 7V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v2"/></svg>,lbl:"Lichaams­compositie"},
+        ].map((e,i)=>(
           <div className="explore-item" key={i}>
-            <div className="explore-icon">{e.emoji}</div>
-            <div className="explore-label">{e.label}</div>
+            <div className="explore-icon">{e.ico}</div>
+            <div className="explore-label">{e.lbl}</div>
           </div>
         ))}
       </div>
 
-      {/* Metric Charts */}
-      <div className="section" style={{ marginTop: 12 }}>
-        <MetricChart title="Tijd geslapen" value={latestSlaap ? fmtMin(Math.round(latestSlaap * 60)) : null}
-          rows={rows} dataKey="slaap" color={C.purple} unit="u" />
-        <MetricChart title="HRV (Hartslag variabiliteit)" value={latestHRV ? `${latestHRV} ms` : null}
-          rows={rows} dataKey="hrv" color={C.green} unit="ms" />
-        <MetricChart title="Rusthartslag" value={latest("rusthr") ? `${latest("rusthr")} bpm` : null}
-          rows={rows} dataKey="rusthr" color={C.red} unit="bpm" />
-        <MetricChart title="Gewicht" value={latestGewicht ? `${latestGewicht} kg` : null}
-          rows={rows} dataKey="gewicht" color={C.blue} unit="kg" />
-        <MetricChart title="Vetpercentage" value={latestVet ? `${latestVet}%` : null}
-          rows={rows} dataKey="vet" color={C.orange} unit="%" />
-        <MetricChart title="Spiermassa" value={latestSpier ? `${latestSpier} kg` : null}
-          rows={rows} dataKey="spier" color={C.teal} unit="kg" />
+      {/* Individuele metrieken */}
+      <div style={{marginTop:8}}>
+        <MetricChart title="Tijd geslapen" value={latestSlaap?fmtMin(Math.round(latestSlaap*60)):null} rows={rows} dataKey="slaap" color={C.purple}/>
+        <MetricChart title="Hartslagvariabiliteit" value={latestHRV?`${latestHRV} ms`:null} rows={rows} dataKey="hrv" color={C.green}/>
+        <MetricChart title="Rusthartslag" value={latest("rusthr")?`${latest("rusthr")} bpm`:null} rows={rows} dataKey="rusthr" color={C.red}/>
+        <MetricChart title="Gewicht" value={latest("gewicht")?`${latest("gewicht")} kg`:null} rows={rows} dataKey="gewicht" color={C.blue}/>
+        <MetricChart title="Vetpercentage" value={latest("vet")?`${latest("vet")}%`:null} rows={rows} dataKey="vet" color={C.orange}/>
       </div>
     </>
   );
 }
 
-// ── Activiteit Tab ────────────────────────────────────
-function ActiviteitTab({ workouts, weekWorkouts, latest, prev }: any) {
-  const latestStappen = latest("stappen");
-  const latestKcal = latest("kcal");
-  const prevStappen = prev("stappen");
-  const prevKcal = prev("kcal");
-
-  return (
+/* ─── Activiteit Tab ─────────────────────────────────── */
+function ActiviteitTab({workouts,weekWorkouts,latest,prev}:any){
+  return(
     <>
-      {/* Stats */}
-      <div className="section" style={{ marginBottom: 8, marginTop: 4 }}>
-        <div className="section-title">Vandaag</div>
-        <div className="stats-grid">
-          <StatCard label="Stappen" value={latestStappen} prevVal={prevStappen} unit="" higherBetter />
-          <StatCard label="Actieve kcal" value={latestKcal} prevVal={prevKcal} unit="" higherBetter />
-          <StatCard label="Water (ml)" value={latest("water")} prevVal={prev("water")} unit="" higherBetter />
-          <StatCard label="Workouts 7d" value={weekWorkouts.length} unit="" />
-        </div>
+      <SectionHeader title="Vandaag"/>
+      <div className="goals-grid">
+        <GoalCard label="Stappen" value={latest("stappen")} goal={8000} unit="stappen" color={C.green}/>
+        <GoalCard label="Actieve calorieën" value={latest("kcal")} goal={500} unit="cal" color={C.orange}/>
+        <GoalCard label="Water" value={latest("water")} goal={2000} unit="ml" color={C.teal}/>
+        <GoalCard label="Workouts 7d" value={weekWorkouts.length} goal={4} unit="" color={C.purple}/>
       </div>
 
-      {/* Body composition */}
-      <div className="section" style={{ marginBottom: 8 }}>
-        <div className="section-title">Lichaamssamenstelling</div>
-        <div className="stats-grid">
-          <StatCard label="Gewicht" value={latest("gewicht")} prevVal={prev("gewicht")} unit=" kg" />
-          <StatCard label="Vetpercentage" value={latest("vet")} prevVal={prev("vet")} unit="%" higherBetter={false} />
-          <StatCard label="Spiermassa" value={latest("spier")} prevVal={prev("spier")} unit=" kg" higherBetter />
-          <StatCard label="Rust-HR" value={latest("rusthr")} prevVal={prev("rusthr")} unit=" bpm" higherBetter={false} />
-        </div>
+      <SectionHeader title="Lichaamssamenstelling"/>
+      <div className="vitals-grid">
+        <VitalCard label="Gewicht" value={latest("gewicht")} unit="kg" prev={prev("gewicht")}/>
+        <VitalCard label="Vetpercentage" value={latest("vet")} unit="%" prev={prev("vet")} higherBetter={false}/>
+        <VitalCard label="Spiermassa" value={latest("spier")} unit="kg" prev={prev("spier")} higherBetter/>
+        <VitalCard label="Rusthartslag" value={latest("rusthr")} unit="bpm" prev={prev("rusthr")} higherBetter={false}/>
       </div>
 
-      {/* All workouts */}
-      <div className="section">
-        <div className="section-title">Alle workouts</div>
-        <div className="sonar-card">
-          {workouts.length > 0 ? (
-            workouts.slice().reverse().slice(0, 20).map((w: any, i: number) => (
-              <WorkoutItem key={i} w={w} />
-            ))
-          ) : (
-            <div style={{ color: "#8e8e93", fontSize: 14, textAlign: "center", padding: "16px 0" }}>
-              Geen workouts gevonden
-            </div>
-          )}
-        </div>
+      <SectionHeader title="Alle workouts"/>
+      <div className="sonar-card">
+        {workouts.length>0?workouts.slice().reverse().slice(0,20).map((w:any,i:number)=>(
+          <WorkoutRow key={i} w={w}/>
+        )):<EmptySection msg="Geen workouts gevonden"/>}
       </div>
     </>
   );
 }
 
-// ── Sub-components ────────────────────────────────────
-function GoalBar({ label, value, goal, unit, color }: { label: string; value: number; goal: number; unit: string; color: string }) {
-  const pct = Math.min(100, (value / goal) * 100);
-  return (
-    <div className="goal-bar-item">
-      <div className="goal-bar-row">
-        <span>{label}</span>
-        <span>{Math.round(value).toLocaleString("nl-NL")}{unit} / {goal.toLocaleString("nl-NL")}{unit} {pct >= 100 ? "✅" : ""}</span>
+/* ─── Sub-components ─────────────────────────────────── */
+function SectionHeader({title,action}:{title:string;action?:string}){
+  return(
+    <div className="section-hdr">
+      <span className="section-hdr-title">{title}</span>
+      {action&&<button className="section-hdr-action">{action}</button>}
+    </div>
+  );
+}
+
+function GoalCard({label,value,goal,unit,color}:{label:string;value:number|null;goal:number;unit:string;color:string}){
+  const v=value??0;
+  const pct=Math.min(100,(v/goal)*100);
+  return(
+    <div className="goal-card">
+      <div className="goal-card-label">{label}</div>
+      <div className="goal-card-value">
+        {Math.round(v).toLocaleString("nl-NL")}
+        <span className="goal-card-unit"> {unit}</span>
       </div>
-      <div className="goal-track">
-        <div className="goal-fill" style={{ width: `${pct}%`, background: color }} />
+      <div className="goal-bar-wrap">
+        <div className="goal-bar-track">
+          <div className="goal-bar-fill" style={{width:`${pct}%`,background:color}}/>
+        </div>
+        <span className="goal-bar-pct">{Math.round(pct)}%</span>
       </div>
     </div>
   );
 }
 
-function SleepPhase({ label, min, max, color }: { label: string; min: number | null; max: number; color: string }) {
-  const pct = min && max > 0 ? Math.min(100, (min / max) * 100) : 0;
-  return (
-    <div>
-      <div className="sleep-phase-row">
-        <span className="sleep-phase-name" style={{ fontSize: 13, fontWeight: 600 }}>{label}</span>
-        <span className="sleep-phase-val">{fmtMin(min)}</span>
+function VitalCard({label,value,unit,prev,higherBetter}:{label:string;value:number|null;unit:string;prev?:number|null;higherBetter?:boolean}){
+  let delta:React.ReactNode=null;
+  if(value!=null&&prev!=null&&prev!==0){
+    const d=((value-prev)/Math.abs(prev))*100;
+    const good=Math.abs(d)<1?"flat":higherBetter===undefined?"flat":(d>0)===higherBetter?"up":"down";
+    delta=<span className={`vital-delta ${good}`}>{d>0?"↑":d<0?"↓":"→"}{Math.abs(d).toFixed(0)}%</span>;
+  }
+  return(
+    <div className="vital-card">
+      <div className="vital-label">{label}</div>
+      <div className="vital-value">
+        {value!=null?<>{value.toLocaleString("nl-NL")}<span className="vital-unit"> {unit}</span></>:<span style={{color:C.muted}}>–</span>}
       </div>
-      <div className="sleep-phase-track">
-        <div className="sleep-phase-fill" style={{ width: `${pct}%`, background: color }} />
-      </div>
+      {delta}
     </div>
   );
 }
 
-function WorkoutItem({ w }: { w: any }) {
-  return (
-    <div className="workout-item">
-      <div className="workout-icon">{icon(w.name ?? "")}</div>
+function PhaseRow({label,min,max,color}:{label:string;min:number|null;max:number;color:string}){
+  const pct=min&&max>0?Math.min(100,(min/max)*100):0;
+  return(
+    <div className="phase-row">
+      <div className="phase-top">
+        <span className="phase-name">{label}</span>
+        <span className="phase-val">{fmtMin(min)}</span>
+      </div>
+      <div className="phase-track"><div className="phase-fill" style={{width:`${pct}%`,background:color}}/></div>
+    </div>
+  );
+}
+
+function WorkoutRow({w}:{w:any}){
+  return(
+    <div className="workout-row">
+      <div className="workout-ico-wrap"><WorkoutIcon name={w.name??""}/></div>
       <div className="workout-info">
         <div className="workout-name">{w.name}</div>
         <div className="workout-meta">
-          {new Date(w.start).toLocaleDateString("nl-NL", { weekday: "short", day: "numeric", month: "short" })}
-          {w.duration ? ` · ${Math.round(w.duration)} min` : ""}
-          {w.avghr ? ` · ❤️ ${Math.round(w.avghr)} bpm` : ""}
+          {new Date(w.start).toLocaleDateString("nl-NL",{weekday:"short",day:"numeric",month:"short"})}
+          {w.duration?` · ${Math.round(w.duration)} min`:""}
+          {w.avghr?` · ${Math.round(w.avghr)} bpm`:""}
         </div>
       </div>
-      {w.energy ? <div className="workout-kcal">{Math.round(w.energy)} kcal</div> : null}
+      {w.energy&&<div className="workout-kcal">{Math.round(w.energy)}<span style={{fontSize:11,opacity:.6}}> kcal</span></div>}
     </div>
   );
 }
 
-function StatCard({ label, value, prevVal, unit, higherBetter }: {
-  label: string; value: number | null; prevVal?: number | null; unit: string; higherBetter?: boolean;
-}) {
-  let deltaEl = null;
-  if (value != null && prevVal != null && prevVal !== 0) {
-    const diff = ((value - prevVal) / Math.abs(prevVal)) * 100;
-    const cls = Math.abs(diff) < 1 ? "delta-flat" : (diff > 0) === (higherBetter !== false) && higherBetter !== undefined ? "delta-up" : "delta-down";
-    deltaEl = <div className={`stat-delta ${cls}`}>{diff > 0 ? "↑" : diff < 0 ? "↓" : "→"} {Math.abs(diff).toFixed(0)}%</div>;
-  }
-  return (
-    <div className="stat-card">
-      <div className="stat-label">{label}</div>
-      <div className="stat-value">{value != null ? value.toLocaleString("nl-NL") : "–"}<span className="stat-unit">{value != null ? unit : ""}</span></div>
-      {deltaEl}
-    </div>
-  );
-}
-
-function PhotoCard({ title, sub, pct, gradient, accent }: { title: string; sub: string; pct: number; gradient: string; accent: string }) {
-  return (
-    <div className="photo-card" style={{ background: gradient }}>
-      <div className="photo-card-overlay" style={{
-        background: "linear-gradient(to right, rgba(0,0,0,0.6) 50%, rgba(0,0,0,0.2) 100%)"
-      }} />
+function PhotoCard({title,sub,pct,gradient}:{title:string;sub:string;pct:number;gradient:string}){
+  return(
+    <div className="photo-card" style={{background:gradient}}>
+      <div className="photo-card-overlay"/>
       <div className="photo-card-content">
         <div className="photo-card-title">{title}</div>
         <div className="photo-card-sub">{sub}</div>
       </div>
-      <div className="photo-card-ring">
-        <PctRing pct={pct} size={72} color={accent} />
-      </div>
+      <SmallRing pct={pct} size={66}/>
     </div>
   );
 }
 
-function MetricChart({ title, value, rows, dataKey, color, unit }: {
-  title: string; value: string | null; rows: any[]; dataKey: string; color: string; unit: string;
-}) {
-  const vals = rows.filter(r => r[dataKey] != null);
-  return (
-    <div className="metric-chart-card">
-      <div className="metric-chart-label">{title}</div>
-      <div className="metric-chart-val" style={!value ? { color: "#8e8e93" } as any : undefined}>
-        {value ?? "Geen gegevens"}
-      </div>
-      {vals.length > 1 ? (
-        <ResponsiveContainer width="100%" height={80}>
-          <LineChart data={rows} margin={{ left: 0, right: 0, top: 0, bottom: 0 }}>
-            <XAxis dataKey="day" tick={{ fill: C.muted, fontSize: 8 }} interval="preserveStartEnd" axisLine={false} tickLine={false} />
-            <YAxis domain={["auto", "auto"]} tick={{ fill: C.muted, fontSize: 8 }} width={24} axisLine={false} tickLine={false} />
-            <Tooltip contentStyle={tt} />
-            <Line dataKey={dataKey} stroke={color} strokeWidth={2} dot={false} connectNulls />
+function MetricChart({title,value,rows,dataKey,color}:{title:string;value:string|null;rows:any[];dataKey:string;color:string}){
+  const hasData=rows.some(r=>r[dataKey]!=null);
+  return(
+    <div className="metric-card">
+      <div className="metric-label">{title}</div>
+      <div className={`metric-value${!value?" metric-empty":""}`}>{value??"Geen gegevens"}</div>
+      {hasData?(
+        <ResponsiveContainer width="100%" height={72}>
+          <LineChart data={rows} margin={{left:0,right:0,top:2,bottom:0}}>
+            <XAxis dataKey="day" tick={{fill:"rgba(255,255,255,0.3)",fontSize:8}} axisLine={false} tickLine={false} interval="preserveStartEnd"/>
+            <YAxis domain={["auto","auto"]} tick={{fill:"rgba(255,255,255,0.3)",fontSize:8}} width={22} axisLine={false} tickLine={false}/>
+            <Tooltip contentStyle={tt}/>
+            <Line dataKey={dataKey} stroke={color} strokeWidth={2} dot={false} connectNulls/>
           </LineChart>
         </ResponsiveContainer>
-      ) : (
-        <div style={{ height: 40, display: "flex", alignItems: "flex-end" }}>
-          {["M","D","W","D","V","Z","Z"].map((d, i) => (
-            <div key={i} style={{ flex: 1, textAlign: "center", fontSize: 9, color: C.muted, fontWeight: 600 }}>{d}</div>
+      ):(
+        <div className="metric-empty-chart">
+          {["M","D","W","D","V","Z","Z"].map((d,i)=>(
+            <span key={i} style={{flex:1,textAlign:"center",fontSize:9,color:"rgba(255,255,255,0.25)"}}>{d}</span>
           ))}
         </div>
       )}
@@ -633,22 +582,27 @@ function MetricChart({ title, value, rows, dataKey, color, unit }: {
   );
 }
 
-// ── Tab Bar ───────────────────────────────────────────
-function SonarTabBar({ tab, onTab }: { tab: string; onTab: (t: any) => void }) {
-  return (
+function EmptySection({msg}:{msg:string}){
+  return<div style={{color:C.muted,fontSize:14,textAlign:"center",padding:"16px 0"}}>{msg}</div>;
+}
+
+/* ─── Tab Bar ────────────────────────────────────────── */
+function TabBar({tab,onTab}:{tab:string;onTab:(t:any)=>void}){
+  return(
     <nav className="tabbar">
-      <button className={`tab-item ${tab === "home" ? "active" : ""}`} onClick={() => onTab("home")}>
-        <div className="tab-icon">🏠</div>Home
+      <button className={`tab-item${tab==="home"?" active":""}`} onClick={()=>onTab("home")}>
+        <IcoHome a={tab==="home"}/><span>Home</span>
       </button>
-      <button className={`tab-item ${tab === "trends" ? "active" : ""}`} onClick={() => onTab("trends")}>
-        <div className="tab-icon">📊</div>Trends
+      <button className={`tab-item${tab==="trends"?" active":""}`} onClick={()=>onTab("trends")}>
+        <IcoTrends a={tab==="trends"}/><span>Trends</span>
       </button>
-      <button className={`tab-item ${tab === "activiteit" ? "active" : ""}`} onClick={() => onTab("activiteit")}>
-        <div className="tab-icon">❤️</div>Activiteit
+      <button className={`tab-item${tab==="activiteit"?" active":""}`} onClick={()=>onTab("activiteit")}>
+        <IcoHeart a={tab==="activiteit"}/><span>Activiteit</span>
       </button>
-      <a className={`tab-item`} href="/chat">
-        <div className="tab-icon">✦</div>AI Coach
+      <a className="tab-item" href="/chat">
+        <IcoStar/><span>AI Coach</span>
       </a>
+      <button className="tab-add"><IcoPlus/></button>
     </nav>
   );
 }
